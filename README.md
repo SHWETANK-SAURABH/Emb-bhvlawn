@@ -47,12 +47,12 @@ python main.py
 ### `src/world.py`
 | Name                                                   | Description |
 |--------------------------------------------------------|-------------|
-| `Obstacle`                                             | Sqaure obstacle with x, y, length attributes. |
+| `Obstacle`                                             | Circular obstacle with x, y, radius attributes. |
 | `LawnWorld`                                            | Procedurally-generated lawn: manages obstacles, surfaces, and cut-grass overlay. |
 | `LawnWorld.build_surface()`                            | Render grass texture and obstacles into the world pygame surface. |
-| `LawnWorld.mark_cut(x, y, radius)`                     | Paint a cut-grass square onto the transparent overlay. |
+| `LawnWorld.mark_cut(x, y, theta)`                     | Paint a cut-grass square onto the transparent overlay. |
 | `LawnWorld.thumbnail(w, h)`                            | Return a smoothly-scaled thumbnail of the world surface. |
-| `draw_mower(surf, x, y, theta)`                        | Render the top-down/left-right square mower with direction arrow and sensor dots. |
+| `draw_mower(surf, x, y, theta)`                        | Render the top-down square mower with direction arrow and sensor dots. |
 | `draw_sensor_cone(surf, x, y, theta, angle_off, dist)` | Render a single translucent ultrasonic sensor cone. |
 
 ### `src/planner.py`
