@@ -18,9 +18,9 @@ class AutoMower:
     and paints cut-grass marks onto the LawnWorld surface.
     """
 
-    Kp:         float = 1.2   # proportional heading gain (legacy, kept for reference)
-    LOOKAHEAD:  int   = 0     # extra waypoint look-ahead index
-    CUT_RADIUS: int   = 22    # radius of cut-grass mark (px)
+    Kp:        float = 1.2   # proportional heading gain (legacy, kept for reference)
+    LOOKAHEAD: int   = 0     # extra waypoint look-ahead index
+    CUT_HALF:  int   = 22    # half-side of the square cut-grass mark (px)
 
     def __init__(
         self,
@@ -149,11 +149,11 @@ class AutoMower:
                         best = hit
             self.sensor_ranges[si] = min(best, 300.0)
 
-        # ── Mark cut grass ────────────────────────────────────────────────────
+        # ── Mark cut grass (square patch, rotated with mower heading) ─────────
         self._cut_acc += dt
         if self._cut_acc > 0.05:
             self._cut_acc = 0.0
-            lawn.mark_cut(self.x, self.y, self.CUT_RADIUS)
+            lawn.mark_cut(self.x, self.y, self.CUT_HALF, self.theta)
 
     def progress(self) -> float:
         """Return completion fraction in [0, 1]."""
