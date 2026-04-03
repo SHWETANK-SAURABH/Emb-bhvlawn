@@ -80,7 +80,7 @@ class LawnWorld:
         for el in self._elements:
             if el[0] == "obstacle":
                 _, x, y, r = el
-                pygame.draw.circle(surf, (60, 60, 60),   (x, y), r)
+                pygame.draw.circle(surf, (60, 60, 60),    (x, y), r)
                 pygame.draw.circle(surf, (100, 100, 100), (x, y), r, 2)
         self._surf = surf
         self._cut_surf = pygame.Surface((self.W, self.H), pygame.SRCALPHA)
@@ -100,10 +100,17 @@ class LawnWorld:
             self.build_surface()
         return self._cut_surf
 
-    def mark_cut(self, x: float, y: float, radius: int = 14) -> None:
-        """Paint a cut-grass circle onto the cut overlay at (x, y)."""
+    def mark_cut(self, x: float, y: float, half: int = 14, theta: float = 0.0) -> None:
+        """Paint a rotated square cut-grass patch onto the cut overlay at (x, y)."""
         c = random.choice(CUT_PAL)
-        pygame.draw.circle(self._cut_surf, (*c, 190), (int(x), int(y)), radius)
+        # Build the four corners of an axis-aligned square then rotate by theta
+        cos_t, sin_t = math.cos(theta), math.sin(theta)
+        corners = []
+        for dx, dy in ((-half, -half), (half, -half), (half, half), (-half, half)):
+            rx = dx * cos_t - dy * sin_t
+            ry = dx * sin_t + dy * cos_t
+            corners.append((x + rx, y + ry))
+        pygame.draw.polygon(self._cut_surf, (*c, 190), corners)
 
     def thumbnail(self, w: int, h: int) -> pygame.Surface:
         """Return a smoothly-scaled thumbnail of the world surface."""
@@ -130,20 +137,46 @@ def _grass_base(surf: pygame.Surface, rect: tuple, pal: list, seed: int = 0) -> 
         pygame.draw.line(surf, rng.choice(pal), (x, y), (x + lean, y - h), 1)
 
 
+def _rotated_rect_pts(cx: float, cy: float, half: int, theta: float) -> list:
+    """Return the four world-space corners of a square centred at (cx,cy), rotated by theta."""
+    cos_t, sin_t = math.cos(theta), math.sin(theta)
+    pts = []
+    for dx, dy in ((-half, -half), (half, -half), (half, half), (-half, half)):
+        rx = dx * cos_t - dy * sin_t
+        ry = dx * sin_t + dy * cos_t
+        pts.append((cx + rx, cy + ry))
+    return pts
+
+
 def draw_mower(surf: pygame.Surface, x: int, y: int, theta: float) -> None:
-    """Render the top-down circular mower with direction arrow and sensor dots."""
-    radius = 18
-    pygame.draw.circle(surf, (40, 40, 40),   (int(x), int(y)), radius + 2)
-    pygame.draw.circle(surf, MOWER_COL,      (int(x), int(y)), radius)
-    pygame.draw.circle(surf, (200, 200, 200), (int(x), int(y)), radius // 2)
-    pygame.draw.circle(surf, (230, 230, 230), (int(x), int(y)), radius // 2, 1)
-    ax = x + math.cos(theta) * (radius + 6)
-    ay = y + math.sin(theta) * (radius + 6)
+    """Render the top-down square mower with direction arrow and corner sensor dots."""
+    half = 18   # half-side length of the square body (matches original radius)
+
+    # Shadow / outline — slightly larger square
+    shadow_pts = _rotated_rect_pts(x, y, half + 2, theta)
+    pygame.draw.polygon(surf, (40, 40, 40), shadow_pts)
+
+    # Main body
+    body_pts = _rotated_rect_pts(x, y, half, theta)
+    pygame.draw.polygon(surf, MOWER_COL, body_pts)
+
+    # Inner panel (smaller square, same orientation)
+    inner_pts = _rotated_rect_pts(x, y, half // 2, theta)
+    pygame.draw.polygon(surf, (200, 200, 200), inner_pts)
+    pygame.draw.polygon(surf, (230, 230, 230), inner_pts, 1)
+
+    # Direction arrow pointing forward from centre
+    ax = x + math.cos(theta) * (half + 6)
+    ay = y + math.sin(theta) * (half + 6)
     pygame.draw.line(surf, (255, 255, 255), (int(x), int(y)), (int(ax), int(ay)), 2)
-    for off in [-math.pi / 3, math.pi / 3]:
-        sx = x + math.cos(theta + off) * radius
-        sy = y + math.sin(theta + off) * radius
-        pygame.draw.circle(surf, (80, 220, 255), (int(sx), int(sy)), 3)
+
+    # Sensor dots at the two front corners of the square
+    cos_t, sin_t = math.cos(theta), math.sin(theta)
+    # front-left and front-right corners
+    for (dx, dy) in ((half, -half), (half, half)):
+        rx = dx * cos_t - dy * sin_t
+        ry = dx * sin_t + dy * cos_t
+        pygame.draw.circle(surf, (80, 220, 255), (int(x + rx), int(y + ry)), 3)
 
 
 def draw_sensor_cone(
