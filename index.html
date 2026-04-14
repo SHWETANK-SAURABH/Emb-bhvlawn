@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Lawn Mower — Learning-Based Coverage</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0f0a;
+    --surface: #111811;
+    --surface2: #162016;
+    --border: #1f2e1f;
+    --border-bright: #2a4a2a;
+    --grass: #1a3a1a;
+    --grass-cut: #2d5a2d;
+    --grass-fresh: #3a7a3a;
+    --obstacle: #8b2020;
+    --obstacle-new: #cc4444;
+    --mower: #e8c840;
+    --mower-glow: rgba(232,200,64,0.4);
+    --path: rgba(100,200,100,0.3);
+    --demo-path: rgba(64,160,255,0.5);
+    --accent: #5dde5d;
+    --accent2: #e8c840;
+    --accent3: #4db8ff;
+    --text: #c8e8c8;
+    --text-dim: #6a8a6a;
+    --text-bright: #e8f8e8;
+    --red: #e05555;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── HEADER ─── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .logo {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+    color: var(--accent);
+  }
+  .logo span { color: var(--accent2); }
+  .header-status {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    display: inline-block;
+    margin-right: 5px;
+  }
+  .status-dot.active { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 1.5s infinite; }
+  .status-dot.warn { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ─── LAYOUT ─── */
+  .app {
+    display: grid;
+    grid-template-columns: 260px 1fr 260px;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+    height: calc(100vh - 57px);
+  }
+
+  /* ─── PANELS ─── */
+  .panel {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel.right { border-right: none; border-left: 1px solid var(--border); }
+  .panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-header .ph-icon { font-size: 0.8rem; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 12px; }
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+
+  /* ─── CENTER ─── */
+  .center {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* ─── PHASE BAR ─── */
+  .phase-bar {
+    display: flex;
+    padding: 8px 16px;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .phase-step {
+    flex: 1;
+    padding: 6px 8px;
+    text-align: center;
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    color: var(--text-dim);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 600;
+  }
+  .phase-step.active {
+    background: var(--surface2);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .phase-step.done {
+    color: var(--text-dim);
+    border-color: var(--border-bright);
+  }
+  .phase-step.done::after { content: ' ✓'; color: var(--accent); }
+
+  /* ─── CANVAS AREA ─── */
+  .canvas-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  canvas {
+    border: 1px solid var(--border-bright);
+    border-radius: 6px;
+    image-rendering: pixelated;
+    box-shadow: 0 0 40px rgba(93,222,93,0.05);
+  }
+
+  /* ─── CONTROL BAR ─── */
+  .ctrl-bar {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    padding: 7px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--border-bright);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(93,222,93,0.05); }
+  .btn:active { transform: scale(0.97); }
+  .btn.primary { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .btn.primary:hover { background: #6ef06e; }
+  .btn.warn { border-color: var(--obstacle-new); color: var(--obstacle-new); }
+  .btn.warn:hover { background: rgba(204,68,68,0.1); }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .speed-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    font-size: 0.65rem;
+    color: var(--text-dim);
+  }
+  input[type=range] {
+    width: 80px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* ─── METRICS ─── */
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.7rem;
+  }
+  .metric-row:last-child { border-bottom: none; }
+  .metric-label { color: var(--text-dim); }
+  .metric-val { color: var(--text-bright); font-weight: 600; }
+  .metric-val.good { color: var(--accent); }
+  .metric-val.warn { color: var(--accent2); }
+  .metric-val.bad { color: var(--red); }
+
+  .progress-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  /* ─── BEHAVIOR RULES ─── */
+  .rule-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 8px;
+    font-size: 0.68rem;
+  }
+  .rule-title {
+    font-weight: 700;
+    color: var(--accent3);
+    margin-bottom: 5px;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .rule-val { color: var(--text-bright); }
+  .rule-desc { color: var(--text-dim); margin-top: 3px; font-size: 0.62rem; }
+
+  /* ─── LOG ─── */
+  .log-area {
+    font-size: 0.63rem;
+    line-height: 1.7;
+  }
+  .log-line { display: flex; gap: 8px; padding: 2px 0; }
+  .log-time { color: var(--text-dim); flex-shrink: 0; }
+  .log-msg { color: var(--text); }
+  .log-msg.info { color: var(--accent); }
+  .log-msg.warn { color: var(--accent2); }
+  .log-msg.error { color: var(--red); }
+  .log-msg.sys { color: var(--accent3); }
+
+  /* ─── LEGEND ─── */
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 0.62rem; color: var(--text-dim); }
+  .leg-swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ─── ALGO TAG ─── */
+  .algo-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-right: 4px;
+  }
+  .tag-bc { background: rgba(77,184,255,0.15); color: var(--accent3); border: 1px solid rgba(77,184,255,0.3); }
+  .tag-bous { background: rgba(93,222,93,0.15); color: var(--accent); border: 1px solid rgba(93,222,93,0.3); }
+  .tag-astar { background: rgba(232,200,64,0.15); color: var(--accent2); border: 1px solid rgba(232,200,64,0.3); }
+  .tag-cd { background: rgba(224,85,85,0.15); color: var(--red); border: 1px solid rgba(224,85,85,0.3); }
+
+  /* ─── SCROLLBAR ─── */
+  .auto-scroll { overflow-y: auto; max-height: 200px; }
+  .auto-scroll::-webkit-scrollbar { width: 3px; }
+  .auto-scroll::-webkit-scrollbar-thumb { background: var(--border-bright); }
+
+  .section-title {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    font-weight: 700;
+    margin: 12px 0 6px;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+
+  /* ─── PHASE OVERLAY ─── */
+  #phase-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%,-50%);
+    background: rgba(10,15,10,0.92);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 24px 32px;
+    text-align: center;
+    font-family: var(--sans);
+    z-index: 10;
+    pointer-events: none;
+    transition: opacity 0.4s;
+  }
+  #phase-overlay h2 { font-size: 1.2rem; color: var(--accent); margin-bottom: 6px; }
+  #phase-overlay p { font-size: 0.75rem; color: var(--text-dim); font-family: var(--mono); }
+  #phase-overlay.hidden { opacity: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">LAWN<span>BOT</span> <span style="color:var(--text-dim);font-weight:300;font-size:0.8rem">/ imitation learning coverage</span></div>
+  <div class="header-status">
+    <span><span class="status-dot" id="sim-dot"></span><span id="sim-status">IDLE</span></span>
+    <span><span class="status-dot" id="algo-dot"></span><span id="algo-status">WAITING</span></span>
+  </div>
+</header>
+
+<div class="app">
+  <!-- LEFT PANEL: Behavior Rules -->
+  <div class="panel">
+    <div class="panel-header"><span class="ph-icon">🧠</span> Learned Behavior</div>
+    <div class="panel-body">
+      <div class="section-title">Algorithm Stack</div>
+      <div style="margin-bottom:10px;line-height:2">
+        <span class="algo-tag tag-bc">Behavioral Cloning</span><br>
+        <span class="algo-tag tag-bous">Boustrophedon</span><br>
+        <span class="algo-tag tag-cd">Cell Decomp</span><br>
+        <span class="algo-tag tag-astar">A* Replan</span>
+      </div>
+      <hr class="divider">
+      <div class="section-title">Extracted Rules</div>
+      <div id="rules-container">
+        <div style="font-size:0.65rem;color:var(--text-dim);padding:8px 0;">
+          Run demo first to extract behavior rules...
+        </div>
+      </div>
+      <hr class="divider">
+      <div class="section-title">Legend</div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-swatch" style="background:#1a3a1a;border:1px solid #2a4a2a"></div>Uncut grass</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:#3a7a3a"></div>Freshly cut</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:#2d5a2d"></div>Cut (older)</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:#8b2020"></div>Obstacle</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:#cc4444"></div>Dynamic obs.</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:#e8c840"></div>Mower</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:rgba(64,160,255,0.5)"></div>Demo trail</div>
+        <div class="leg-item"><div class="leg-swatch" style="background:rgba(100,200,100,0.5)"></div>Auto path</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: Canvas -->
+  <div class="center">
+    <div class="phase-bar">
+      <div class="phase-step" id="ps-1">1 · Demo</div>
+      <div class="phase-step" id="ps-2">2 · Learn</div>
+      <div class="phase-step" id="ps-3">3 · Plan</div>
+      <div class="phase-step" id="ps-4">4 · Mow</div>
+      <div class="phase-step" id="ps-5">5 · Replan</div>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="sim-canvas"></canvas>
+      <div id="phase-overlay">
+        <h2>LAWNBOT SIM</h2>
+        <p>Click "▶ Run Demo" to begin the simulation</p>
+      </div>
+    </div>
+    <div class="ctrl-bar">
+      <button class="btn primary" id="btn-demo">▶ Run Demo</button>
+      <button class="btn" id="btn-learn" disabled>🧠 Extract Rules</button>
+      <button class="btn" id="btn-new-lawn" disabled>🌱 New Lawn</button>
+      <button class="btn" id="btn-mow" disabled>🚜 Auto Mow</button>
+      <button class="btn warn" id="btn-obstacle" disabled>⚡ Add Obstacle</button>
+      <button class="btn" id="btn-reset">↺ Reset</button>
+      <div class="speed-wrap">
+        <span>SPEED</span>
+        <input type="range" id="speed-slider" min="1" max="10" value="5">
+        <span id="speed-val">5×</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Metrics + Log -->
+  <div class="panel right">
+    <div class="panel-header"><span class="ph-icon">📊</span> Metrics & Log</div>
+    <div class="panel-body">
+      <div class="section-title">Coverage Metrics</div>
+      <div id="metrics-area">
+        <div class="metric-row">
+          <span class="metric-label">Coverage</span>
+          <span class="metric-val" id="m-coverage">0.0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="m-coverage-bar" style="width:0%"></div></div>
+        <div class="metric-row">
+          <span class="metric-label">Overlap</span>
+          <span class="metric-val" id="m-overlap">0.0%</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Efficiency</span>
+          <span class="metric-val" id="m-efficiency">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Steps taken</span>
+          <span class="metric-val" id="m-steps">0</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Replans</span>
+          <span class="metric-val" id="m-replans">0</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Obstacles hit</span>
+          <span class="metric-val" id="m-hits">0</span>
+        </div>
+      </div>
+
+      <hr class="divider">
+      <div class="section-title">Demo Trajectory Stats</div>
+      <div id="demo-stats" style="font-size:0.65rem;color:var(--text-dim)">No demo recorded yet.</div>
+
+      <hr class="divider">
+      <div class="section-title">System Log</div>
+      <div class="log-area auto-scroll" id="log-area">
+        <div class="log-line"><span class="log-time">00:00</span><span class="log-msg sys">System initialized. Ready.</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════╗
+// ║        SMART LAWN MOWER — COMPLETE SIMULATION           ║
+// ║  Modules: Demo · Learning · Planning · Execution        ║
+// ╚══════════════════════════════════════════════════════════╝
+
+// ═══════════════════════════════════════════════
+// MODULE 0: CONFIGURATION
+// ═══════════════════════════════════════════════
+const CONFIG = {
+  CELL:       18,       // px per grid cell
+  DEMO_ROWS:  18,       // demo lawn size
+  DEMO_COLS:  22,
+  NEW_ROWS:   22,       // autonomous lawn size (different!)
+  NEW_COLS:   28,
+  OBSTACLE_COUNT: 4,    // static obstacles
+  FADE_STEPS: 40,       // trail fade
+};
+
+// ═══════════════════════════════════════════════
+// MODULE 1: DEMONSTRATION RECORDING
+// Simulates a human operator mowing a demo lawn.
+// Records: position, direction, velocity, turn angle,
+//          row spacing, distance to obstacles.
+// ═══════════════════════════════════════════════
+class DemoRecorder {
+  constructor(rows, cols, obstacles) {
+    this.rows = rows;
+    this.cols = cols;
+    this.obstacles = new Set(obstacles.map(([r,c]) => `${r},${c}`));
+    this.trajectory = [];   // [{r,c,dir,vel,turnAngle,distToObs}]
+    this.rowSpacings = [];
+    this.turnAngles = [];
+  }
+
+  // Simulate human: boustrophedon sweep with slight imperfections
+  // (spacing +/- 0, occasional turn variation to model real human)
+  simulate(preferDir = 'horizontal', spacing = 1) {
+    this.trajectory = [];
+    this.rowSpacings = [];
+    this.turnAngles = [];
+
+    const visited = new Set();
+    const markObs = this.obstacles;
+
+    const isValid = (r,c) =>
+      r >= 0 && r < this.rows && c >= 0 && c < this.cols &&
+      !markObs.has(`${r},${c}`);
+
+    let r = 1, c = 1;
+    let goingRight = true;
+    let prevRow = r;
+    let prevDir = 0; // angle in degrees (0=right, 90=down)
+
+    if (preferDir === 'horizontal') {
+      for (let row = 1; row < this.rows - 1; row += spacing) {
+        if (!isValid(row, 1)) continue;
+        const cStart = goingRight ? 1 : this.cols - 2;
+        const cEnd   = goingRight ? this.cols - 2 : 1;
+        const step   = goingRight ? 1 : -1;
+        let cc = cStart;
+
+        // Record turn from previous row
+        if (row > 1) {
+          const turnAngle = goingRight ? 90 : -90;
+          this.turnAngles.push(Math.abs(turnAngle));
+          this.rowSpacings.push(row - prevRow);
+          prevRow = row;
+        }
+
+        while (goingRight ? cc <= cEnd : cc >= cEnd) {
+          if (isValid(row, cc)) {
+            const distToObs = this._minDistToObs(row, cc);
+            const dir = goingRight ? 0 : 180;
+            const vel = 1.0;
+            this.trajectory.push({ r: row, c: cc, dir, vel,
+              turnAngle: 0, distToObs, phase: 'sweep' });
+            visited.add(`${row},${cc}`);
+          } else {
+            // Log obstacle avoidance
+            this.trajectory.push({ r: row, c: cc, dir: goingRight?0:180,
+              vel: 0.5, turnAngle: 45, distToObs: 0, phase: 'avoid' });
+          }
+          cc += step;
+        }
+        goingRight = !goingRight;
+      }
+    } else {
+      // Vertical sweep
+      for (let col = 1; col < this.cols - 1; col += spacing) {
+        if (!isValid(1, col)) continue;
+        const rStart = goingRight ? 1 : this.rows - 2;
+        const rEnd   = goingRight ? this.rows - 2 : 1;
+        const step   = goingRight ? 1 : -1;
+        let rr = rStart;
+        if (col > 1) {
+          this.turnAngles.push(90);
+          this.rowSpacings.push(col - prevRow);
+          prevRow = col;
+        }
+        while (goingRight ? rr <= rEnd : rr >= rEnd) {
+          if (isValid(rr, col)) {
+            const distToObs = this._minDistToObs(rr, col);
+            this.trajectory.push({ r: rr, c: col, dir: goingRight?90:270,
+              vel: 1.0, turnAngle: 0, distToObs, phase: 'sweep' });
+            visited.add(`${rr},${col}`);
+          }
+          rr += step;
+        }
+        goingRight = !goingRight;
+      }
+    }
+
+    return this.trajectory;
+  }
+
+  _minDistToObs(r, c) {
+    let minD = 999;
+    for (const key of this.obstacles) {
+      const [or, oc] = key.split(',').map(Number);
+      const d = Math.sqrt((r-or)**2 + (c-oc)**2);
+      if (d < minD) minD = d;
+    }
+    return minD === 999 ? 10 : minD;
+  }
+
+  getStats() {
+    const n = this.trajectory.length;
+    const avoidSteps = this.trajectory.filter(t => t.phase === 'avoid').length;
+    const avgVel = this.trajectory.reduce((s,t) => s+t.vel, 0) / n;
+    const avgDist = this.trajectory.reduce((s,t) => s+t.distToObs, 0) / n;
+    return { n, avoidSteps, avgVel, avgDist,
+      avgSpacing: this.rowSpacings.length ?
+        this.rowSpacings.reduce((a,b)=>a+b,0)/this.rowSpacings.length : 1,
+      avgTurn: this.turnAngles.length ?
+        this.turnAngles.reduce((a,b)=>a+b,0)/this.turnAngles.length : 90 };
+  }
+}
+
+
+// ═══════════════════════════════════════════════
+// MODULE 2: BEHAVIORAL CLONING (LEARNING)
+// Extracts GENERALIZED RULES from trajectory.
+// Does NOT store exact paths.
+// Produces a BehaviorPolicy object.
+// ═══════════════════════════════════════════════
+class BehavioralCloning {
+  /**
+   * Fit: analyze trajectory → extract policy parameters.
+   * This is supervised learning on the state→action mapping,
+   * but since we want interpretable rules (not a neural net),
+   * we compute statistics over the trajectory features.
+   */
+  fit(trajectory, rowSpacings, turnAngles) {
+    if (!trajectory.length) return null;
+
+    // ── Feature: Preferred Direction ──
+    const hCount = trajectory.filter(t => t.dir === 0 || t.dir === 180).length;
+    const vCount = trajectory.filter(t => t.dir === 90 || t.dir === 270).length;
+    const preferredDir = hCount >= vCount ? 'horizontal' : 'vertical';
+
+    // ── Feature: Row Spacing ──
+    const avgSpacing = rowSpacings.length
+      ? Math.round(rowSpacings.reduce((a,b)=>a+b,0) / rowSpacings.length)
+      : 1;
+    const spacingVar = rowSpacings.length
+      ? Math.sqrt(rowSpacings.map(s=>(s-avgSpacing)**2)
+          .reduce((a,b)=>a+b,0) / rowSpacings.length)
+      : 0;
+
+    // ── Feature: Turning Style ──
+    const avgTurn = turnAngles.length
+      ? turnAngles.reduce((a,b)=>a+b,0) / turnAngles.length
+      : 90;
+    // Sharp = close to 90°, smooth = gradual/multi-step
+    const turningStyle = avgTurn >= 80 ? 'sharp' : 'smooth';
+
+    // ── Feature: Obstacle Avoidance Distance ──
+    const obsDists = trajectory.filter(t => t.distToObs < 5).map(t => t.distToObs);
+    const minObsClearance = obsDists.length
+      ? Math.ceil(Math.min(...obsDists) * 0.8)
+      : 1;
+    const safeDistance = Math.max(1, minObsClearance);
+
+    // ── Feature: Velocity Profile ──
+    const sweepVels = trajectory.filter(t=>t.phase==='sweep').map(t=>t.vel);
+    const avgVel = sweepVels.length
+      ? sweepVels.reduce((a,b)=>a+b,0) / sweepVels.length
+      : 1;
+
+    // ── Feature: Coverage Density ──
+    const unique = new Set(trajectory.map(t=>`${t.r},${t.c}`)).size;
+    const density = unique / trajectory.length;
+
+    return {
+      preferredDir,
+      rowSpacing: Math.max(1, avgSpacing),
+      spacingConsistency: spacingVar < 0.5 ? 'consistent' : 'variable',
+      turningStyle,
+      safeDistance,
+      avgVelocity: parseFloat(avgVel.toFixed(2)),
+      overlapTolerance: density < 0.95 ? 'low-overlap' : 'high-overlap',
+      // Derived: turn offset for smooth style
+      turnRadius: turningStyle === 'smooth' ? 2 : 0,
+      confidence: Math.min(1, trajectory.length / 100),
+    };
+  }
+}
+
+
+// ═══════════════════════════════════════════════
+// MODULE 3: ENVIRONMENT & GRID MAP
+// ═══════════════════════════════════════════════
+const CELL_EMPTY    = 0;
+const CELL_OBSTACLE = 1;
+const CELL_COVERED  = 2;
+const CELL_BOUNDARY = 3;
+
+class GridMap {
+  constructor(rows, cols) {
+    this.rows = rows;
+    this.cols = cols;
+    this.grid = Array.from({length:rows}, () => Array(cols).fill(CELL_EMPTY));
+    this.coverCount = Array.from({length:rows}, () => Array(cols).fill(0));
+    this._addBoundary();
+  }
+
+  _addBoundary() {
+    for (let r = 0; r < this.rows; r++)
+      for (let c = 0; c < this.cols; c++)
+        if (r===0||r===this.rows-1||c===0||c===this.cols-1)
+          this.grid[r][c] = CELL_BOUNDARY;
+  }
+
+  // Irregular lawn shape: cut corners
+  applyIrregularShape(cutCorners = true) {
+    if (!cutCorners) return;
+    const cuts = [
+      [1,1],[1,2],[2,1],
+      [1,this.cols-2],[1,this.cols-3],[2,this.cols-2],
+      [this.rows-2,1],[this.rows-3,1],[this.rows-2,2],
+      [this.rows-2,this.cols-2],[this.rows-3,this.cols-2],[this.rows-2,this.cols-3],
+    ];
+    for (const [r,c] of cuts)
+      if (r>0&&r<this.rows-1&&c>0&&c<this.cols-1)
+        this.grid[r][c] = CELL_BOUNDARY;
+  }
+
+  placeObstacles(obstacles) {
+    for (const [r,c] of obstacles)
+      if (r>0&&r<this.rows-1&&c>0&&c<this.cols-1)
+        this.grid[r][c] = CELL_OBSTACLE;
+  }
+
+  cover(r, c) {
+    if (this.grid[r][c] === CELL_EMPTY || this.grid[r][c] === CELL_COVERED) {
+      this.coverCount[r][c]++;
+      this.grid[r][c] = CELL_COVERED;
+      return true;
+    }
+    return false;
+  }
+
+  isWalkable(r, c) {
+    return r>0 && r<this.rows-1 && c>0 && c<this.cols-1 &&
+      this.grid[r][c] !== CELL_OBSTACLE && this.grid[r][c] !== CELL_BOUNDARY;
+  }
+
+  getMetrics() {
+    let total=0, covered=0, overlap=0;
+    for (let r=1;r<this.rows-1;r++) {
+      for (let c=1;c<this.cols-1;c++) {
+        if (this.grid[r][c] !== CELL_BOUNDARY) {
+          total++;
+          const cnt = this.coverCount[r][c];
+          if (cnt > 0) covered++;
+          if (cnt > 1) overlap += cnt - 1;
+        }
+      }
+    }
+    return { total, covered, overlap,
+      coveragePct: total ? (covered/total*100).toFixed(1) : '0.0',
+      overlapPct:  covered ? (overlap/covered*100).toFixed(1) : '0.0',
+    };
+  }
+}
+
+
+// ═══════════════════════════════════════════════
+// MODULE 4A: CELLULAR DECOMPOSITION
+// Splits irregular map into convex cells.
+// Simple trapezoid/vertical-sweep decomp.
+// ═══════════════════════════════════════════════
+class CellDecomposer {
+  decompose(map) {
+    // Vertical sweep: find contiguous walkable column segments per column
+    const cells = [];
+    for (let c = 1; c < map.cols - 1; c++) {
+      let start = -1;
+      for (let r = 1; r < map.rows - 1; r++) {
+        if (map.isWalkable(r, c) && start === -1) start = r;
+        if ((!map.isWalkable(r, c) || r === map.rows-2) && start !== -1) {
+          const end = map.isWalkable(r, c) ? r : r - 1;
+          if (end >= start) cells.push({ c, rStart: start, rEnd: end });
+          start = -1;
+        }
+      }
+    }
+    return cells;
+  }
+}
+
+
+// ═══════════════════════════════════════════════
+// MODULE 4B: BOUSTROPHEDON PATH PLANNER
+// Generates back-and-forth coverage path
+// respecting learned behavior rules.
+// ═══════════════════════════════════════════════
+class BoustrophedonPlanner {
+  /**
+   * plan(map, policy) → array of {r,c} waypoints
+   * Policy parameters respected:
+   *   - preferredDir: sweep axis
+   *   - rowSpacing: gap between strips
+   *   - turningStyle: sharp (direct) or smooth (arc)
+   */
+  plan(map, policy) {
+    const path = [];
+    const spacing = policy.rowSpacing || 1;
+    const dir = policy.preferredDir || 'horizontal';
+
+    if (dir === 'horizontal') {
+      let goRight = true;
+      for (let r = 1; r < map.rows - 1; r += spacing) {
+        // Collect walkable cells in this row
+        const strip = [];
+        for (let c = 1; c < map.cols - 1; c++)
+          if (map.isWalkable(r, c)) strip.push({r, c});
+        if (!strip.length) continue;
+
+        const ordered = goRight ? strip : [...strip].reverse();
+        for (const pt of ordered) path.push(pt);
+
+        // Turning: if smooth, insert arc waypoint
+        if (policy.turningStyle === 'smooth' && r + spacing < map.rows - 1) {
+          const nextR = r + spacing;
+          const turnC = goRight ? map.cols - 2 : 1;
+          if (map.isWalkable(nextR, turnC)) path.push({r: nextR, c: turnC});
+        }
+        goRight = !goRight;
+      }
+    } else {
+      let goDown = true;
+      for (let c = 1; c < map.cols - 1; c += spacing) {
+        const strip = [];
+        for (let r = 1; r < map.rows - 1; r++)
+          if (map.isWalkable(r, c)) strip.push({r, c});
+        if (!strip.length) continue;
+
+        const ordered = goDown ? strip : [...strip].reverse();
+        for (const pt of ordered) path.push(pt);
+        goDown = !goDown;
+      }
+    }
+
+    return path;
+  }
+}
+
+
+// ═══════════════════════════════════════════════
+// MODULE 4C: A* LOCAL REPLANNER
+// Used when a dynamic obstacle appears mid-mow.
+// Finds shortest detour from current pos to
+// next planned waypoint, avoiding obstacle.
+// ═══════════════════════════════════════════════
+class AStarReplanner {
+  /**
+   * findPath(map, start, goal) → [{r,c}] or null
+   * Heuristic: Manhattan distance (admissible for grid)
+   */
+  findPath(map, start, goal) {
+    const h = (r,c) => Math.abs(r-goal.r) + Math.abs(c-goal.c);
+    const key = (r,c) => `${r},${c}`;
+
+    const open = new Map(); // key → {r,c,g,f,parent}
+    const closed = new Set();
+
+    const startNode = {r:start.r, c:start.c, g:0, f:h(start.r,start.c), parent:null};
+    open.set(key(start.r,start.c), startNode);
+
+    let iter = 0;
+    while (open.size > 0 && iter++ < 2000) {
+      // Pop lowest f
+      let bestKey = null, bestNode = null;
+      for (const [k, node] of open) {
+        if (!bestNode || node.f < bestNode.f) { bestKey = k; bestNode = node; }
+      }
+      open.delete(bestKey);
+
+      if (bestNode.r === goal.r && bestNode.c === goal.c)
+        return this._reconstruct(bestNode);
+
+      closed.add(bestKey);
+
+      for (const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        const nr = bestNode.r + dr;
+        const nc = bestNode.c + dc;
+        const nk = key(nr, nc);
+        if (closed.has(nk)) continue;
+        if (!map.isWalkable(nr, nc)) continue;
+
+        const g = bestNode.g + 1;
+        const f = g + h(nr, nc);
+        if (!open.has(nk) || open.get(nk).g > g)
+          open.set(nk, {r:nr, c:nc, g, f, parent:bestNode});
+      }
+    }
+    return null; // no path found
+  }
+
+  _reconstruct(node) {
+    const path = [];
+    let cur = node;
+    while (cur) { path.unshift({r:cur.r, c:cur.c}); cur = cur.parent; }
+    return path;
+  }
+}
+
+
+// ═══════════════════════════════════════════════
+// MODULE 5: SIMULATION ENGINE
+// Drives the mower along the planned path,
+// renders the grid, handles obstacles.
+// ═══════════════════════════════════════════════
+class SimEngine {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.map = null;
+    this.path = [];
+    this.pathIdx = 0;
+    this.mowerPos = {r:1, c:1};
+    this.trail = [];       // recent positions for fade
+    this.demoTrail = [];   // demo overlay
+    this.running = false;
+    this.speed = 5;
+    this.stepCount = 0;
+    this.replanCount = 0;
+    this.hitCount = 0;
+    this.animId = null;
+    this.lastTime = 0;
+    this.accumMs = 0;
+    this.frameDelay = 60; // ms between steps
+    this.onStep = null;
+    this.astar = new AStarReplanner();
+    this.freshCells = new Map(); // {key → age}
+    this.phase = 'idle';
+    this.dynamicObstacles = [];
+  }
+
+  resize(rows, cols) {
+    const W = cols * CONFIG.CELL;
+    const H = rows * CONFIG.CELL;
+    this.canvas.width  = W;
+    this.canvas.height = H;
+  }
+
+  setMap(map)   { this.map = map; }
+  setPath(path) { this.path = path; this.pathIdx = 0; }
+  setDemoTrail(traj) {
+    this.demoTrail = traj.map(t => ({r:t.r, c:t.c}));
+  }
+
+  start() {
+    this.running = true;
+    this.mowerPos = this.path.length ? {...this.path[0]} : {r:1,c:1};
+    this.lastTime = performance.now();
+    this.accumMs  = 0;
+    this._loop(this.lastTime);
+  }
+
+  stop() { this.running = false; if (this.animId) cancelAnimationFrame(this.animId); }
+
+  _loop(now) {
+    if (!this.running) return;
+    const dt = now - this.lastTime;
+    this.lastTime = now;
+    this.accumMs += dt;
+    const delay = Math.max(5, 120 - this.speed * 11);
+
+    while (this.accumMs >= delay) {
+      this.accumMs -= delay;
+      if (!this._step()) { this.running = false; this.onStep && this.onStep('done'); return; }
+    }
+
+    this.render();
+    this.animId = requestAnimationFrame(t => this._loop(t));
+  }
+
+  _step() {
+    if (this.pathIdx >= this.path.length) return false;
+
+    const target = this.path[this.pathIdx];
+
+    // Check if target is now blocked (dynamic obstacle)
+    if (!this.map.isWalkable(target.r, target.c)) {
+      // A* replan: find next reachable waypoint
+      let goalIdx = this.pathIdx + 1;
+      while (goalIdx < this.path.length && !this.map.isWalkable(this.path[goalIdx].r, this.path[goalIdx].c))
+        goalIdx++;
+      if (goalIdx >= this.path.length) { this.pathIdx++; return true; }
+
+      const detour = this.astar.findPath(this.map, this.mowerPos, this.path[goalIdx]);
+      if (detour && detour.length > 1) {
+        this.replanCount++;
+        // Splice detour into path
+        this.path.splice(this.pathIdx, goalIdx - this.pathIdx, ...detour.slice(1));
+        this.onStep && this.onStep('replan');
+      } else {
+        this.pathIdx = goalIdx;
+      }
+      return true;
+    }
+
+    // Move mower
+    this.mowerPos = { ...target };
+    this.map.cover(target.r, target.c);
+    this.freshCells.set(`${target.r},${target.c}`, 0);
+    this.trail.push({...target});
+    if (this.trail.length > CONFIG.FADE_STEPS) this.trail.shift();
+
+    this.stepCount++;
+    this.pathIdx++;
+    this.onStep && this.onStep('step');
+    return this.pathIdx < this.path.length;
+  }
+
+  addDynamicObstacle(r, c) {
+    if (!this.map.isWalkable(r, c)) return false;
+    this.map.grid[r][c] = CELL_OBSTACLE;
+    this.dynamicObstacles.push({r, c});
+    this.onStep && this.onStep('obstacle');
+    return true;
+  }
+
+  render() {
+    const ctx = this.ctx;
+    const { rows, cols } = this.map;
+    const C = CONFIG.CELL;
+
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // ── Age fresh cells ──
+    for (const [k, age] of this.freshCells) {
+      this.freshCells.set(k, age + 1);
+      if (age > 60) this.freshCells.delete(k);
+    }
+
+    // ── Draw grid ──
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = c * C, y = r * C;
+        const cell = this.map.grid[r][c];
+        const cnt  = this.map.coverCount[r][c];
+        const fresh = this.freshCells.has(`${r},${c}`);
+        const freshAge = this.freshCells.get(`${r},${c}`) || 0;
+
+        if (cell === CELL_BOUNDARY) {
+          ctx.fillStyle = '#0d1a0d';
+        } else if (cell === CELL_OBSTACLE) {
+          const isDynamic = this.dynamicObstacles.some(o=>o.r===r&&o.c===c);
+          ctx.fillStyle = isDynamic ? '#cc4444' : '#8b2020';
+        } else if (cell === CELL_COVERED) {
+          if (fresh && freshAge < 20) {
+            // Freshly cut — bright green fading
+            const t = freshAge / 20;
+            ctx.fillStyle = `rgb(${Math.round(58+t*(-20))},${Math.round(122+t*(-40))},${Math.round(58+t*(-20))})`;
+          } else {
+            ctx.fillStyle = cnt > 1 ? '#1e4a1e' : '#2d5a2d';
+          }
+        } else {
+          ctx.fillStyle = '#1a3a1a';
+        }
+
+        ctx.fillRect(x, y, C, C);
+
+        // Grid line
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x, y, C, C);
+      }
+    }
+
+    // ── Demo trail overlay ──
+    if (this.demoTrail.length && this.phase === 'demo') {
+      for (let i = 1; i < this.demoTrail.length; i++) {
+        const a = this.demoTrail[i-1], b = this.demoTrail[i];
+        const alpha = 0.15 + 0.3 * (i / this.demoTrail.length);
+        ctx.strokeStyle = `rgba(64,160,255,${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(a.c*C+C/2, a.r*C+C/2);
+        ctx.lineTo(b.c*C+C/2, b.r*C+C/2);
+        ctx.stroke();
+      }
+    }
+
+    // ── Path trail (fading) ──
+    for (let i = 1; i < this.trail.length; i++) {
+      const a = this.trail[i-1], b = this.trail[i];
+      const alpha = 0.1 + 0.4 * (i / this.trail.length);
+      ctx.strokeStyle = `rgba(100,220,100,${alpha})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(a.c*C+C/2, a.r*C+C/2);
+      ctx.lineTo(b.c*C+C/2, b.r*C+C/2);
+      ctx.stroke();
+    }
+
+    // ── Mower ──
+    if (this.mowerPos) {
+      const mx = this.mowerPos.c * C + C/2;
+      const my = this.mowerPos.r * C + C/2;
+      const rad = C * 0.42;
+
+      // Glow
+      const glow = ctx.createRadialGradient(mx,my,0, mx,my,rad*2.5);
+      glow.addColorStop(0, 'rgba(232,200,64,0.3)');
+      glow.addColorStop(1, 'rgba(232,200,64,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(mx, my, rad*2.5, 0, Math.PI*2);
+      ctx.fill();
+
+      // Body
+      ctx.fillStyle = '#e8c840';
+      ctx.beginPath();
+      ctx.arc(mx, my, rad, 0, Math.PI*2);
+      ctx.fill();
+
+      // Inner detail
+      ctx.fillStyle = '#c8a820';
+      ctx.beginPath();
+      ctx.arc(mx, my, rad*0.5, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.fillStyle = '#0a0f0a';
+      ctx.beginPath();
+      ctx.arc(mx, my, rad*0.2, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  renderStatic() {
+    // Render without animation frame (for demo phases)
+    this.render();
+  }
+}
+
+
+// ═══════════════════════════════════════════════
+// MODULE 6: METRICS & LOGGING
+// ═══════════════════════════════════════════════
+function updateMetrics(sim) {
+  if (!sim.map) return;
+  const m = sim.map.getMetrics();
+  const pct = parseFloat(m.coveragePct);
+  const bar = document.getElementById('m-coverage-bar');
+  document.getElementById('m-coverage').textContent = m.coveragePct + '%';
+  document.getElementById('m-coverage').className = 'metric-val ' + (pct>90?'good':pct>60?'warn':'bad');
+  bar.style.width = pct + '%';
+  bar.style.background = pct > 90 ? 'var(--accent)' : pct > 60 ? 'var(--accent2)' : 'var(--red)';
+
+  const ovPct = parseFloat(m.overlapPct);
+  document.getElementById('m-overlap').textContent = m.overlapPct + '%';
+  document.getElementById('m-overlap').className = 'metric-val ' + (ovPct<10?'good':ovPct<25?'warn':'bad');
+
+  const total = sim.stepCount;
+  const eff = total > 0 ? ((m.covered / total)*100).toFixed(1) : '—';
+  document.getElementById('m-efficiency').textContent = eff !== '—' ? eff+'%' : '—';
+  document.getElementById('m-steps').textContent = sim.stepCount;
+  document.getElementById('m-replans').textContent = sim.replanCount;
+  document.getElementById('m-hits').textContent = sim.hitCount;
+}
+
+let logCount = 0;
+function addLog(msg, type='') {
+  const area = document.getElementById('log-area');
+  const now = new Date();
+  const ts = `${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-time">${ts}</span><span class="log-msg ${type}">${msg}</span>`;
+  area.appendChild(line);
+  area.scrollTop = area.scrollHeight;
+  if (++logCount > 80) area.removeChild(area.firstChild);
+}
+
+function renderRules(policy) {
+  const c = document.getElementById('rules-container');
+  if (!policy) { c.innerHTML = '<div style="font-size:0.65rem;color:var(--text-dim)">No rules learned yet.</div>'; return; }
+
+  const dirIcon = policy.preferredDir === 'horizontal' ? '↔' : '↕';
+  const turnIcon = policy.turningStyle === 'sharp' ? '⌐' : '⌒';
+
+  c.innerHTML = `
+    <div class="rule-card">
+      <div class="rule-title">Preferred Direction</div>
+      <div class="rule-val">${dirIcon} ${policy.preferredDir.toUpperCase()}</div>
+      <div class="rule-desc">BC extracted from sweep vectors in trajectory</div>
+    </div>
+    <div class="rule-card">
+      <div class="rule-title">Row Spacing</div>
+      <div class="rule-val">${policy.rowSpacing} cell${policy.rowSpacing>1?'s':''} <span style="color:var(--text-dim)">(${policy.spacingConsistency})</span></div>
+      <div class="rule-desc">Mean strip gap from inter-row transitions</div>
+    </div>
+    <div class="rule-card">
+      <div class="rule-title">Turning Style</div>
+      <div class="rule-val">${turnIcon} ${policy.turningStyle.toUpperCase()}</div>
+      <div class="rule-desc">Derived from turn angle distribution (μ=${policy.avgVelocity})</div>
+    </div>
+    <div class="rule-card">
+      <div class="rule-title">Obstacle Clearance</div>
+      <div class="rule-val">${policy.safeDistance} cell${policy.safeDistance>1?'s':''}</div>
+      <div class="rule-desc">Min distance to obstacle from trajectory</div>
+    </div>
+    <div class="rule-card">
+      <div class="rule-title">Confidence</div>
+      <div class="rule-val">${(policy.confidence*100).toFixed(0)}%</div>
+      <div class="rule-desc">Based on trajectory sample size</div>
+    </div>
+  `;
+}
+
+function setPhaseStep(n, done=[]) {
+  for (let i=1;i<=5;i++) {
+    const el = document.getElementById(`ps-${i}`);
+    el.className = 'phase-step' + (i===n?' active':done.includes(i)?' done':'');
+  }
+}
+
+function setSimStatus(text, active=false, warn=false) {
+  document.getElementById('sim-status').textContent = text;
+  document.getElementById('sim-dot').className = 'status-dot' + (active?' active':warn?' warn':'');
+}
+
+function setAlgoStatus(text, type='') {
+  document.getElementById('algo-status').textContent = text;
+  document.getElementById('algo-dot').className = 'status-dot' + (type?' '+type:'');
+}
+
+
+// ═══════════════════════════════════════════════
+// MAIN CONTROLLER
+// Orchestrates all phases.
+// ═══════════════════════════════════════════════
+const canvas  = document.getElementById('sim-canvas');
+const sim     = new SimEngine(canvas);
+const bc      = new BehavioralCloning();
+const planner = new BoustrophedonPlanner();
+const decomp  = new CellDecomposer();
+
+let policy        = null;
+let demoRecorder  = null;
+let demoMap       = null;
+let autoMap       = null;
+let autoPath      = [];
+let phase         = 'idle'; // idle | demo | learned | planned | mowing | done
+let donePhasesArr = [];
+
+const speedSlider = document.getElementById('speed-slider');
+speedSlider.oninput = () => {
+  sim.speed = parseInt(speedSlider.value);
+  document.getElementById('speed-val').textContent = speedSlider.value + '×';
+};
+
+function hideOverlay() {
+  document.getElementById('phase-overlay').classList.add('hidden');
+}
+
+function showOverlay(title, sub) {
+  const el = document.getElementById('phase-overlay');
+  el.querySelector('h2').textContent = title;
+  el.querySelector('p').textContent = sub;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 2200);
+}
+
+// ── Random obstacle placement ──
+function randomObstacles(rows, cols, count, margin=2) {
+  const obs = [];
+  const used = new Set();
+  let tries = 0;
+  while (obs.length < count && tries++ < 1000) {
+    const r = margin + Math.floor(Math.random() * (rows - margin*2));
+    const c = margin + Math.floor(Math.random() * (cols - margin*2));
+    const k = `${r},${c}`;
+    if (!used.has(k)) { used.add(k); obs.push([r,c]); }
+  }
+  return obs;
+}
+
+// ──────────────────────────────────────────────
+// PHASE 1: DEMO
+// ──────────────────────────────────────────────
+document.getElementById('btn-demo').onclick = async () => {
+  if (sim.running) return;
+  sim.stop();
+  phase = 'demo';
+  donePhasesArr = [];
+
+  const ROWS = CONFIG.DEMO_ROWS, COLS = CONFIG.DEMO_COLS;
+  sim.resize(ROWS, COLS);
+
+  demoMap = new GridMap(ROWS, COLS);
+  const demoObs = randomObstacles(ROWS, COLS, 3);
+  demoMap.placeObstacles(demoObs);
+
+  demoRecorder = new DemoRecorder(ROWS, COLS, demoObs);
+  const traj = demoRecorder.simulate('horizontal', 1);
+
+  sim.setMap(demoMap);
+  sim.demoTrail = traj.map(t=>({r:t.r,c:t.c}));
+  sim.mowerPos  = traj.length ? {r:traj[0].r, c:traj[0].c} : {r:1,c:1};
+  sim.trail = [];
+  sim.freshCells = new Map();
+  sim.dynamicObstacles = [];
+  sim.phase = 'demo';
+
+  // Animate demo progressively
+  let di = 0;
+  sim.running = true;
+  setPhaseStep(1);
+  setSimStatus('DEMO', true);
+  setAlgoStatus('RECORDING', 'active');
+  hideOverlay();
+  addLog('▶ Human demo started on ' + ROWS + '×' + COLS + ' lawn', 'info');
+  addLog('Recording: position, direction, velocity, turn angles', 'sys');
+
+  const animDemo = () => {
+    if (!sim.running) return;
+    if (di < traj.length) {
+      const t = traj[di];
+      sim.mowerPos = {r:t.r, c:t.c};
+      demoMap.cover(t.r, t.c);
+      sim.freshCells.set(`${t.r},${t.c}`, 0);
+      sim.trail.push({r:t.r, c:t.c});
+      if (sim.trail.length > 30) sim.trail.shift();
+      di++;
+      sim.renderStatic();
+      const delay = Math.max(8, 80 - sim.speed * 7);
+      setTimeout(animDemo, delay);
+    } else {
+      // Demo done
+      sim.running = false;
+      sim.renderStatic();
+
+      const stats = demoRecorder.getStats();
+      document.getElementById('demo-stats').innerHTML = `
+        <div class="metric-row"><span class="metric-label">Trajectory pts</span><span class="metric-val">${stats.n}</span></div>
+        <div class="metric-row"><span class="metric-label">Avoid steps</span><span class="metric-val">${stats.avoidSteps}</span></div>
+        <div class="metric-row"><span class="metric-label">Avg obstacle dist</span><span class="metric-val">${stats.avgDist.toFixed(2)} cells</span></div>
+        <div class="metric-row"><span class="metric-label">Avg row spacing</span><span class="metric-val">${stats.avgSpacing.toFixed(2)}</span></div>
+        <div class="metric-row"><span class="metric-label">Avg turn angle</span><span class="metric-val">${stats.avgTurn.toFixed(1)}°</span></div>
+      `;
+
+      addLog(`Demo complete: ${stats.n} trajectory points captured`, 'info');
+      addLog(`Avg row spacing: ${stats.avgSpacing.toFixed(2)}, turn: ${stats.avgTurn.toFixed(1)}°`);
+      donePhasesArr.push(1);
+      setPhaseStep(2, donePhasesArr);
+      setSimStatus('IDLE');
+      setAlgoStatus('DEMO DONE');
+      showOverlay('DEMO COMPLETE', `${stats.n} trajectory points recorded`);
+
+      document.getElementById('btn-demo').disabled = true;
+      document.getElementById('btn-learn').disabled = false;
+      document.getElementById('btn-new-lawn').disabled = false;
+      document.getElementById('btn-mow').disabled = true;
+    }
+  };
+
+  animDemo();
+};
+
+
+// ──────────────────────────────────────────────
+// PHASE 2: LEARNING (BEHAVIORAL CLONING)
+// ──────────────────────────────────────────────
+document.getElementById('btn-learn').onclick = () => {
+  if (!demoRecorder) return;
+  setPhaseStep(2, donePhasesArr);
+  setSimStatus('LEARNING', false, true);
+  setAlgoStatus('BC FITTING', 'warn');
+  addLog('🧠 Behavioral Cloning: fitting policy from trajectory...', 'sys');
+
+  // Simulate brief "training" delay for UX
+  setTimeout(() => {
+    policy = bc.fit(
+      demoRecorder.trajectory,
+      demoRecorder.rowSpacings,
+      demoRecorder.turnAngles
+    );
+    renderRules(policy);
+
+    addLog(`✓ Preferred direction: ${policy.preferredDir}`, 'info');
+    addLog(`✓ Row spacing: ${policy.rowSpacing} cell(s), style: ${policy.spacingConsistency}`);
+    addLog(`✓ Turning style: ${policy.turningStyle} (radius=${policy.turnRadius})`);
+    addLog(`✓ Obstacle clearance: ${policy.safeDistance} cells`);
+    addLog(`✓ Confidence: ${(policy.confidence*100).toFixed(0)}%`, 'info');
+
+    donePhasesArr.push(2);
+    setPhaseStep(3, donePhasesArr);
+    setSimStatus('IDLE');
+    setAlgoStatus('POLICY READY');
+    showOverlay('RULES EXTRACTED', 'Behavioral Cloning complete');
+
+    document.getElementById('btn-learn').disabled = true;
+    document.getElementById('btn-new-lawn').disabled = false;
+  }, 600);
+};
+
+
+// ──────────────────────────────────────────────
+// PHASE 3: NEW LAWN + PLANNING
+// ──────────────────────────────────────────────
+document.getElementById('btn-new-lawn').onclick = () => {
+  if (!policy) {
+    addLog('⚠ Run learning first!', 'warn');
+    return;
+  }
+
+  const ROWS = CONFIG.NEW_ROWS, COLS = CONFIG.NEW_COLS;
+  sim.resize(ROWS, COLS);
+
+  autoMap = new GridMap(ROWS, COLS);
+  autoMap.applyIrregularShape(true); // Irregular lawn!
+  const autoObs = randomObstacles(ROWS, COLS, CONFIG.OBSTACLE_COUNT, 3);
+  autoMap.placeObstacles(autoObs);
+
+  // Cellular decomp
+  const cells = decomp.decompose(autoMap);
+  addLog(`Cellular decomp: ${cells.length} convex cells identified`, 'sys');
+
+  // Boustrophedon plan with learned policy
+  autoPath = planner.plan(autoMap, policy);
+
+  sim.setMap(autoMap);
+  sim.setPath(autoPath);
+  sim.demoTrail = [];
+  sim.trail = [];
+  sim.freshCells = new Map();
+  sim.dynamicObstacles = [];
+  sim.stepCount = 0;
+  sim.replanCount = 0;
+  sim.hitCount = 0;
+  sim.pathIdx = 0;
+  sim.mowerPos = autoPath.length ? {...autoPath[0]} : {r:1,c:1};
+  sim.phase = 'plan';
+  sim.running = false;
+  sim.renderStatic();
+
+  donePhasesArr.push(3);
+  setPhaseStep(4, donePhasesArr);
+  setSimStatus('READY');
+  setAlgoStatus('PATH PLANNED');
+  updateMetrics(sim);
+  addLog(`New ${ROWS}×${COLS} lawn generated (irregular shape)`, 'info');
+  addLog(`Boustrophedon path: ${autoPath.length} waypoints`, 'info');
+  addLog(`Rules applied: dir=${policy.preferredDir}, spacing=${policy.rowSpacing}, turn=${policy.turningStyle}`);
+  showOverlay('LAWN READY', `${autoPath.length} waypoints planned`);
+
+  document.getElementById('btn-mow').disabled = false;
+  document.getElementById('btn-obstacle').disabled = false;
+};
+
+
+// ──────────────────────────────────────────────
+// PHASE 4: AUTONOMOUS MOWING
+// ──────────────────────────────────────────────
+document.getElementById('btn-mow').onclick = () => {
+  if (!autoMap || sim.running) return;
+
+  phase = 'mowing';
+  donePhasesArr.push(4);
+  setPhaseStep(4, donePhasesArr);
+  setSimStatus('MOWING', true);
+  setAlgoStatus('BOUSTROPHEDON', 'active');
+  addLog('🚜 Autonomous mowing started', 'info');
+  hideOverlay();
+
+  sim.speed = parseInt(speedSlider.value);
+  sim.onStep = (evt) => {
+    if (evt === 'done') {
+      const m = autoMap.getMetrics();
+      addLog(`✅ Mowing complete! Coverage: ${m.coveragePct}%, Overlap: ${m.overlapPct}%`, 'info');
+      addLog(`Steps: ${sim.stepCount}, Replans: ${sim.replanCount}`);
+      setSimStatus('DONE');
+      setAlgoStatus('COMPLETE');
+      donePhasesArr.push(5);
+      setPhaseStep(5, donePhasesArr);
+      document.getElementById('btn-mow').disabled = true;
+      showOverlay('MOWING COMPLETE', `Coverage: ${m.coveragePct}%`);
+    } else if (evt === 'replan') {
+      setAlgoStatus('A* REPLAN', 'warn');
+      addLog(`⚡ A* replanning triggered (obstacle avoided)`, 'warn');
+      setTimeout(() => setAlgoStatus('BOUSTROPHEDON', 'active'), 1200);
+    }
+    updateMetrics(sim);
+  };
+  sim.start();
+  document.getElementById('btn-mow').disabled = true;
+};
+
+
+// ──────────────────────────────────────────────
+// PHASE 5: DYNAMIC OBSTACLE
+// ──────────────────────────────────────────────
+document.getElementById('btn-obstacle').onclick = () => {
+  if (!autoMap || !sim.running) {
+    addLog('⚠ Start mowing first, then add obstacle', 'warn');
+    return;
+  }
+
+  // Place obstacle near the mower's upcoming path
+  const ahead = sim.path.slice(sim.pathIdx, sim.pathIdx + 15);
+  let placed = false;
+  for (const pt of ahead) {
+    // Place obstacle a bit ahead
+    const r = pt.r + (Math.random() > 0.5 ? 1 : -1);
+    const c = pt.c;
+    if (r>0 && r<autoMap.rows-1 && autoMap.isWalkable(r,c)) {
+      const ok = sim.addDynamicObstacle(r, c);
+      if (ok) {
+        placed = true;
+        setPhaseStep(5, donePhasesArr);
+        setAlgoStatus('OBSTACLE!', 'warn');
+        addLog(`⚡ Dynamic obstacle placed at (${r},${c})`, 'error');
+        addLog('A* replanner will handle on next encounter', 'sys');
+        break;
+      }
+    }
+  }
+  if (!placed) {
+    // Random placement
+    const r = 2 + Math.floor(Math.random()*(autoMap.rows-4));
+    const c = 2 + Math.floor(Math.random()*(autoMap.cols-4));
+    sim.addDynamicObstacle(r, c);
+    addLog(`⚡ Dynamic obstacle placed at (${r},${c})`, 'error');
+  }
+};
+
+// ── Reset ──
+document.getElementById('btn-reset').onclick = () => {
+  sim.stop();
+  sim.running = false;
+  policy = null;
+  demoRecorder = null;
+  demoMap = null;
+  autoMap = null;
+  autoPath = [];
+  phase = 'idle';
+  donePhasesArr = [];
+  sim.map = null;
+  sim.trail = [];
+  sim.demoTrail = [];
+  sim.freshCells = new Map();
+  sim.dynamicObstacles = [];
+  sim.stepCount = 0;
+  sim.replanCount = 0;
+  sim.hitCount = 0;
+
+  // Reset buttons
+  document.getElementById('btn-demo').disabled = false;
+  document.getElementById('btn-learn').disabled = true;
+  document.getElementById('btn-new-lawn').disabled = true;
+  document.getElementById('btn-mow').disabled = true;
+  document.getElementById('btn-obstacle').disabled = true;
+
+  renderRules(null);
+  setPhaseStep(1, []);
+  setSimStatus('IDLE');
+  setAlgoStatus('WAITING');
+  updateMetricsReset();
+  document.getElementById('demo-stats').innerHTML = 'No demo recorded yet.';
+
+  // Show blank canvas
+  sim.resize(CONFIG.DEMO_ROWS, CONFIG.DEMO_COLS);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = '#0a0f0a';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  document.getElementById('phase-overlay').classList.remove('hidden');
+  document.getElementById('phase-overlay').querySelector('h2').textContent = 'LAWNBOT SIM';
+  document.getElementById('phase-overlay').querySelector('p').textContent = 'Click "▶ Run Demo" to begin';
+
+  addLog('↺ System reset', 'sys');
+};
+
+function updateMetricsReset() {
+  document.getElementById('m-coverage').textContent = '0.0%';
+  document.getElementById('m-coverage').className = 'metric-val';
+  document.getElementById('m-coverage-bar').style.width = '0%';
+  document.getElementById('m-overlap').textContent = '0.0%';
+  document.getElementById('m-efficiency').textContent = '—';
+  document.getElementById('m-steps').textContent = '0';
+  document.getElementById('m-replans').textContent = '0';
+  document.getElementById('m-hits').textContent = '0';
+}
+
+// ── Initial blank canvas ──
+sim.resize(CONFIG.DEMO_ROWS, CONFIG.DEMO_COLS);
+const ctx0 = canvas.getContext('2d');
+ctx0.fillStyle = '#0a0f0a';
+ctx0.fillRect(0,0,canvas.width,canvas.height);
+</script>
+</body>
+</html>
